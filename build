@@ -1,1 +1,2 @@
-cc -g objectpool.c -o objectpool
+clang -g -fsanitize=undefined,address -c objectpool.c -I/usr/include/glib-2.0 -I/usr/lib/x86_64-linux-gnu/glib-2.0/include
+clang -g -fsanitize=undefined,address objectpool.o -o objectpool -lglib-2.0

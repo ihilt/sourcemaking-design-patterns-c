@@ -2,47 +2,59 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
-
-/**
- * TODO: use a list for Resources. If the list is empty, get_resource will
- * return a newly created Resource.  Otherwise it will pop one from the front
- * of the list for use. return_resource will reset the Resource and push it to
- * back of the list.
- */
+#include <glib.h>
 
 typedef struct {
 	int value;
 	int (*get_value)(void*);
 	void (*set_value)(void*, int);
+	void (*reset)(void*);
 } Resource;
 
 typedef struct {
-	int value;
-	Resource* (*get_resource)(void);
-	void* (*return_resource)(Resource*);
+	Resource* (*get_resource)(GPtrArray*);
+	void (*return_resource)(Resource*, GPtrArray*);
+	GPtrArray* resources;
 } ObjectPool;
 
-int get_value(void* arg) {
+static int get_value(void* arg) {
 	Resource* res = (Resource*)arg;
 	return res->value;
 }
 
-void set_value(void* arg, int value) {
-	Resource* res = (Resource*)arg;
-	res->value = value;
+static void set_value(void* arg, int value) {
+	Resource* resource = (Resource*)arg;
+	resource->value = value;
 }
 
-Resource* get_resource() {
-	Resource* resource = malloc(sizeof(Resource));
-	memset(resource, 0, sizeof(Resource));
-	resource->get_value = &get_value;
-	resource->set_value = &set_value;
-	return resource;
+static void reset(void* arg) {
+	Resource* resource = (Resource*)arg;
+	resource->set_value(resource, 0);
 }
 
-void* return_resource(Resource* resource) {
-	free(resource);
-	return NULL;
+Resource* get_resource(GPtrArray* resources) {
+	printf("# of resources: %d\n", resources->len);
+	if (resources->len == 0) {
+		printf("Create resource\n");
+		Resource* resource = g_new(Resource, 1);
+		resource->get_value = get_value;
+		resource->set_value = set_value;
+		resource->reset     = reset;
+		return resource;
+	} else {
+		printf("Reuse resource\n");
+		return g_ptr_array_steal_index(resources, 0);
+	}
+}
+
+static void return_resource(Resource* resource, GPtrArray* resources) {
+	resource->reset(resource);
+	g_ptr_array_add(resources, resource);
+}
+
+static void resources_free_func(void* arg) {
+	Resource* resource = (Resource*)arg;
+	g_free(resource);
 }
 
 ObjectPool* get_instance() {
@@ -51,11 +63,10 @@ ObjectPool* get_instance() {
 
 	if (created) return pool;
 
-	pool = malloc(sizeof(ObjectPool));
-	memset(pool, 0, sizeof(ObjectPool));
-
-	pool->get_resource = &get_resource;
-	pool->return_resource = &return_resource;
+	pool = g_new(ObjectPool, 1);
+	pool->get_resource = get_resource;
+	pool->return_resource = return_resource;
+	pool->resources = g_ptr_array_new_with_free_func(resources_free_func);
 
 	created = true;
 
@@ -63,35 +74,31 @@ ObjectPool* get_instance() {
 }
 
 int main(void) {
-	ObjectPool* pool;
-	pool = get_instance();
-
-	Resource* one;
-	Resource* two;
+	ObjectPool* pool = get_instance();
+	Resource* one = pool->get_resource(pool->resources);
+	Resource* two = pool->get_resource(pool->resources);
 
 	/* Resources will be created*/
-	one = pool->get_resource();
 	one->set_value(one, 10);
 	printf("one = %d\n", one->get_value(one));
-	two = pool->get_resource();
+	
 	two->set_value(two, 20);
 	printf("two = %d\n", two->get_value(two));
 
-	pool->return_resource(one);
-	pool->return_resource(two);
+	pool->return_resource(one, pool->resources);
+	pool->return_resource(two, pool->resources);
 
-	/* Resources will be reused.
-	 * Notice that the value of both resources were reset back to zero.
+	/* Resources will be reused. Notice that the value of both resources
+	 * were reset back to zero.
 	 */
-	one = pool->get_resource();
+	one = pool->get_resource(pool->resources);
 	printf("one = %d\n", one->get_value(one));
-	two = pool->get_resource();
+
+	two = pool->get_resource(pool->resources);
 	printf("two = %d\n", two->get_value(two));
 
-	pool->return_resource(one);
-	pool->return_resource(two);
-
-	free(pool);
+	pool->return_resource(one, pool->resources);
+	pool->return_resource(two, pool->resources);
 
 	return 0;
 }
