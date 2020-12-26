@@ -5,7 +5,7 @@ default_options: [
 	'warning_level=3',
 	'buildtype=debug',
 	'b_ndebug=if-release',
-	'c_args=-fsanitize=undefined,address -Wformat -Wformat-security -Werror=format-security'
+	'c_args=-Wformat -Wformat-security -Werror=format-security'
 ])
 
 glib = dependency('glib-2.0')
