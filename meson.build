@@ -12,5 +12,6 @@ glib = dependency('glib-2.0')
 
 executable('objectpool', 'objectpool.c', dependencies : glib)
 executable('chain-of-responsibility', 'chain-of-responsibility.c', dependencies : glib)
+executable('command', 'command.c', dependencies : glib)
 
 run_target('run', command : 'scripts/run.sh')
